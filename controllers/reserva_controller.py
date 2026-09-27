@@ -211,6 +211,15 @@ class ReservaController:
                 tipos
             )
 
+    def ventana_filtros_exportacion(self):
+        """Abre la ventana de filtros de exportación de Reservas.
+
+        La vista ya contiene el formulario de filtros; este método mantiene
+        el mismo esquema que los demás controladores y permite que el botón
+        Exportar invoque siempre al controlador.
+        """
+        self.view.ventana_filtros_exportacion()
+
     def exportar_excel(self):
 
         success, rows = self.model.get_all()

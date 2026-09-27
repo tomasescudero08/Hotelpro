@@ -19,6 +19,8 @@ from utils.exporter import (
     exportar_excel,
     exportar_pdf
 )
+from utils.export_filters import filtrar_tarifas, detectar_indice_fecha_tarifa
+from views.export_dialogs import VentanaFiltroTarifa
 
 TREE_KEYS = ["ID_tarifa", "ID_tipo", "tarifa_base",
              "impuestos", "descuento", "condiciones"]
@@ -281,4 +283,135 @@ class TarifaController:
             messagebox.showerror(
                 "Error",
                 f"No se pudo exportar el PDF:\n{e}"
+            )
+
+    def ventana_filtros_exportacion(self):
+        success, rows = self.model.get_all()
+
+        if not success:
+            messagebox.showerror("Error", f"No se pudieron obtener las tarifas: {rows}")
+            return
+
+        if not rows:
+            messagebox.showinfo("Exportar", "No hay tarifas para exportar.")
+            return
+
+        tipos = list(self.view.tipos.keys())
+
+        VentanaFiltroTarifa(
+            self.view,
+            self.exportar_filtrado,
+            tipos
+        )
+
+    @staticmethod
+    def _numero_valido(valor):
+        if valor in (None, ""):
+            return True
+        try:
+            float(valor)
+            return True
+        except (TypeError, ValueError):
+            return False
+
+    def exportar_filtrado(self, formato, filtros, ventana):
+        precio_desde = filtros.get("precio_desde")
+        precio_hasta = filtros.get("precio_hasta")
+
+        if not self._numero_valido(precio_desde) or not self._numero_valido(precio_hasta):
+            messagebox.showerror(
+                "Validación",
+                "El rango de precio debe contener únicamente números."
+            )
+            return
+
+        if precio_desde and precio_hasta and float(precio_desde) > float(precio_hasta):
+            messagebox.showerror(
+                "Validación",
+                "El precio desde no puede ser mayor que el precio hasta."
+            )
+            return
+
+        success, rows = self.model.get_all()
+
+        if not success:
+            messagebox.showerror(
+                "Error",
+                f"No se pudieron obtener las tarifas: {rows}"
+            )
+            return
+
+        tipo = filtros.get("tipo")
+        ID_tipo = self.view.tipos.get(tipo) if tipo and tipo != "Todos" else None
+
+        fecha_index = detectar_indice_fecha_tarifa(rows)
+
+        if (filtros.get("fecha_desde") or filtros.get("fecha_hasta")) and fecha_index is None:
+            messagebox.showwarning(
+                "Filtro por fecha",
+                "El módulo de Tarifas actualmente no recibe una fecha desde "
+                "sp_GetAllTarifas. El filtro por fecha no puede aplicarse hasta "
+                "que el procedimiento devuelva una columna de fecha."
+            )
+            return
+
+        rows_filtradas = filtrar_tarifas(
+            rows,
+            filtros.get("fecha_desde"),
+            filtros.get("fecha_hasta"),
+            ID_tipo,
+            precio_desde or None,
+            precio_hasta or None,
+            fecha_index
+        )
+
+        if not rows_filtradas:
+            messagebox.showinfo(
+                "Exportación",
+                "No existen tarifas que coincidan con los filtros."
+            )
+            return
+
+        extension = ".xlsx" if formato == "excel" else ".pdf"
+        tipo_archivo = "Excel" if formato == "excel" else "PDF"
+        filename = filedialog.asksaveasfilename(
+            title=f"Guardar {tipo_archivo}",
+            defaultextension=extension,
+            filetypes=[(tipo_archivo, f"*{extension}")]
+        )
+
+        if not filename:
+            return
+
+        columns = [
+            "ID_tarifa", "ID_tipo", "tarifa_base",
+            "impuestos", "descuento", "condiciones"
+        ]
+
+        # Si una versión de la BD devuelve una fecha adicional, también se
+        # incluye en el archivo exportado para no perder ese dato.
+        if fecha_index is not None and fecha_index == 6:
+            columns.append("fecha")
+
+        try:
+            if formato == "excel":
+                exportar_excel(rows_filtradas, columns, filename)
+            else:
+                exportar_pdf(
+                    rows_filtradas,
+                    columns,
+                    filename,
+                    "REPORTE DE TARIFAS"
+                )
+
+            ventana.destroy()
+            messagebox.showinfo(
+                "Éxito",
+                f"{tipo_archivo} exportado correctamente."
+            )
+
+        except Exception as e:
+            messagebox.showerror(
+                "Error",
+                f"No se pudo exportar:\n{e}"
             )

@@ -156,17 +156,27 @@ class ReservaView(ttk.Frame):
             self.entries[key] = entry
 
         btns = tk.Frame(left)
-        btns.pack(pady=12)
+        btns.pack(pady=(12, 0), anchor="w")
         for txt, color, cmd in [
             ("Guardar",    "#4CAF50", lambda: self.controller.guardar()),
             ("Actualizar", "#2196F3", lambda: self.controller.actualizar()),
             ("Eliminar",   "#f44336", lambda: self.controller.eliminar()),
             ("Buscar",     "#FF9800", lambda: self.controller.buscar()),
             ("Limpiar",    "#9E9E9E", lambda: self.controller.limpiar()),
-            ("Exportar", "#607D8B", lambda: self.ventana_filtros_exportacion())
         ]:
             tk.Button(btns, text=txt, font=("Arial", 9, "bold"),
                       bg=color, fg="white", width=9, command=cmd).pack(side="left", padx=2)
+
+        # Exportar queda debajo de Guardar para reducir el ancho del panel izquierdo.
+        tk.Button(
+            left,
+            text="Exportar",
+            font=("Arial", 9, "bold"),
+            bg="#607D8B",
+            fg="white",
+            width=9,
+            command=self.controller.ventana_filtros_exportacion
+        ).pack(anchor="w", padx=2, pady=(4, 12))
 
         right = tk.Frame(main)
         right.pack(side="right", fill="both", expand=True)

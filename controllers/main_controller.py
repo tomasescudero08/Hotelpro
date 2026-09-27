@@ -32,6 +32,10 @@ class MainController:
         self.reserva_controller = ReservaController(self.view.tab_reserva, self.db)
         self.tarifa_controller = TarifaController(self.view.tab_tarifa, self.db)
 
+        # Los controladores ya crearon todos los widgets; ahora aplicamos
+        # el tema inicial también a las vistas de cada módulo.
+        self.view.apply_theme()
+
         self.view.protocol("WM_DELETE_WINDOW", self.on_closing)
 
     def on_closing(self):

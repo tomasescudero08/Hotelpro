@@ -18,6 +18,8 @@ from utils.exporter import (
     exportar_excel,
     exportar_pdf
 )
+from utils.export_filters import filtrar_habitaciones
+from views.export_dialogs import VentanaFiltroHabitacion
 
 TREE_KEYS = ["ID_habitacion", "numero_habitacion", "piso", "ID_tipo", "orientacion", "estado", "tarifa_base", "ID_hotel"]
 
@@ -292,4 +294,123 @@ class HabitacionController:
             messagebox.showerror(
                 "Error",
                 f"No se pudo exportar el PDF:\n{e}"
+            )
+
+    def ventana_filtros_exportacion(self):
+        success, rows = self.model.get_all()
+
+        if not success:
+            messagebox.showerror("Error", f"No se pudieron obtener las habitaciones: {rows}")
+            return
+
+        if not rows:
+            messagebox.showinfo("Exportar", "No hay habitaciones para exportar.")
+            return
+
+        tipos = list(self.view.tipos.keys())
+        hoteles = list(self.view.hoteles.keys())
+
+        VentanaFiltroHabitacion(
+            self.view,
+            self.exportar_filtrado,
+            tipos,
+            hoteles
+        )
+
+    @staticmethod
+    def _numero_valido(valor):
+        if valor in (None, ""):
+            return True
+        try:
+            float(valor)
+            return True
+        except (TypeError, ValueError):
+            return False
+
+    def exportar_filtrado(self, formato, filtros, ventana):
+        tarifa_desde = filtros.get("tarifa_desde")
+        tarifa_hasta = filtros.get("tarifa_hasta")
+
+        if not self._numero_valido(tarifa_desde) or not self._numero_valido(tarifa_hasta):
+            messagebox.showerror(
+                "Validación",
+                "El rango de tarifa debe contener únicamente números."
+            )
+            return
+
+        if tarifa_desde and tarifa_hasta and float(tarifa_desde) > float(tarifa_hasta):
+            messagebox.showerror(
+                "Validación",
+                "La tarifa desde no puede ser mayor que la tarifa hasta."
+            )
+            return
+
+        success, rows = self.model.get_all()
+
+        if not success:
+            messagebox.showerror(
+                "Error",
+                f"No se pudieron obtener las habitaciones: {rows}"
+            )
+            return
+
+        tipo = filtros.get("tipo")
+        hotel = filtros.get("hotel")
+
+        ID_tipo = self.view.tipos.get(tipo) if tipo and tipo != "Todos" else None
+        ID_hotel = self.view.hoteles.get(hotel) if hotel and hotel != "Todos" else None
+
+        rows_filtradas = filtrar_habitaciones(
+            rows,
+            filtros.get("estado"),
+            ID_tipo,
+            ID_hotel,
+            tarifa_desde or None,
+            tarifa_hasta or None
+        )
+
+        if not rows_filtradas:
+            messagebox.showinfo(
+                "Exportación",
+                "No existen habitaciones que coincidan con los filtros."
+            )
+            return
+
+        extension = ".xlsx" if formato == "excel" else ".pdf"
+        tipo_archivo = "Excel" if formato == "excel" else "PDF"
+        filename = filedialog.asksaveasfilename(
+            title=f"Guardar {tipo_archivo}",
+            defaultextension=extension,
+            filetypes=[(tipo_archivo, f"*{extension}")]
+        )
+
+        if not filename:
+            return
+
+        columns = [
+            "ID_habitacion", "numero_habitacion", "piso", "ID_tipo",
+            "orientacion", "estado", "tarifa_base", "ID_hotel"
+        ]
+
+        try:
+            if formato == "excel":
+                exportar_excel(rows_filtradas, columns, filename)
+            else:
+                exportar_pdf(
+                    rows_filtradas,
+                    columns,
+                    filename,
+                    "REPORTE DE HABITACIONES"
+                )
+
+            ventana.destroy()
+            messagebox.showinfo(
+                "Éxito",
+                f"{tipo_archivo} exportado correctamente."
+            )
+
+        except Exception as e:
+            messagebox.showerror(
+                "Error",
+                f"No se pudo exportar:\n{e}"
             )

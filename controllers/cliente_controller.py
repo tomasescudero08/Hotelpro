@@ -20,6 +20,8 @@ from utils.exporter import (
     exportar_excel,
     exportar_pdf
 )
+from utils.export_filters import filtrar_clientes
+from views.export_dialogs import VentanaFiltroCliente
 
 
 
@@ -320,4 +322,94 @@ class ClienteController:
             messagebox.showerror(
                 "Error",
                 f"No se pudo exportar el PDF:\n{e}"
+            )
+
+
+    def ventana_filtros_exportacion(self):
+        success, rows = self.model.get_all()
+
+        if not success:
+            messagebox.showerror("Error", f"No se pudieron obtener los clientes: {rows}")
+            return
+
+        if not rows:
+            messagebox.showinfo("Exportar", "No hay clientes para exportar.")
+            return
+
+        nacionalidades = sorted({
+            str(row[4]) for row in rows
+            if len(row) > 4 and row[4] is not None
+        })
+        niveles = sorted({
+            str(row[9]) for row in rows
+            if len(row) > 9 and row[9] is not None
+        })
+
+        VentanaFiltroCliente(
+            self.view,
+            self.exportar_filtrado,
+            nacionalidades,
+            niveles
+        )
+
+    def exportar_filtrado(self, formato, filtros, ventana):
+        success, rows = self.model.get_all()
+
+        if not success:
+            messagebox.showerror("Error", f"No se pudieron obtener los clientes: {rows}")
+            return
+
+        rows_filtradas = filtrar_clientes(
+            rows,
+            filtros.get("fecha_desde"),
+            filtros.get("fecha_hasta"),
+            filtros.get("nacionalidad"),
+            filtros.get("nivel_fidelizacion")
+        )
+
+        if not rows_filtradas:
+            messagebox.showinfo(
+                "Exportación",
+                "No existen clientes que coincidan con los filtros."
+            )
+            return
+
+        extension = ".xlsx" if formato == "excel" else ".pdf"
+        tipo_archivo = "Excel" if formato == "excel" else "PDF"
+        filename = filedialog.asksaveasfilename(
+            title=f"Guardar {tipo_archivo}",
+            defaultextension=extension,
+            filetypes=[(tipo_archivo, f"*{extension}")]
+        )
+
+        if not filename:
+            return
+
+        columns = [
+            "ID cliente", "nombre", "apellido", "documento",
+            "nacionalidad", "fecha_nacimiento", "direccion",
+            "telefono", "correo", "nivel_fidelizacion"
+        ]
+
+        try:
+            if formato == "excel":
+                exportar_excel(rows_filtradas, columns, filename)
+            else:
+                exportar_pdf(
+                    rows_filtradas,
+                    columns,
+                    filename,
+                    "REPORTE DE CLIENTES"
+                )
+
+            ventana.destroy()
+            messagebox.showinfo(
+                "Éxito",
+                f"{tipo_archivo} exportado correctamente."
+            )
+
+        except Exception as e:
+            messagebox.showerror(
+                "Error",
+                f"No se pudo exportar:\n{e}"
             )
