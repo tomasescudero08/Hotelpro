@@ -33,7 +33,9 @@ class HabitacionModel:
         orientacion,
         estado,
         tarifa_base,
-        ID_hotel
+        ID_hotel,
+        imagen
+
     ):
         return self.db.call_procedure(
             'sp_InsertHabitacion',
@@ -44,7 +46,8 @@ class HabitacionModel:
                 orientacion,
                 estado,
                 tarifa_base,
-                ID_hotel
+                ID_hotel,
+                imagen
             )
         )
 
@@ -57,7 +60,8 @@ class HabitacionModel:
         orientacion,
         estado,
         tarifa_base,
-        ID_hotel
+        ID_hotel,
+        imagen
     ):
         return self.db.call_procedure(
             'sp_UpdateHabitacion',
@@ -69,7 +73,8 @@ class HabitacionModel:
                 orientacion,
                 estado,
                 tarifa_base,
-                ID_hotel
+                ID_hotel,
+                imagen
             )
         )
 

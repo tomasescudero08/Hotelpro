@@ -5,7 +5,10 @@ CONTROLADOR de habitaciones: valida la entrada, llama al HabitacionModel y
 actualiza la HabitacionView con el resultado.
 """
 
-from tkinter import messagebox, filedialog
+import os
+import tkinter as tk
+from tkinter import messagebox, filedialog, Toplevel, ttk
+from PIL import Image, ImageTk
 
 from models.habitacion_model import HabitacionModel
 from views.habitacion_view import HabitacionView
@@ -21,7 +24,10 @@ from utils.exporter import (
 from utils.export_filters import filtrar_habitaciones
 from views.export_dialogs import VentanaFiltroHabitacion
 
-TREE_KEYS = ["ID_habitacion", "numero_habitacion", "piso", "ID_tipo", "orientacion", "estado", "tarifa_base", "ID_hotel"]
+TREE_KEYS = [
+    "ID_habitacion", "numero_habitacion", "piso", "ID_tipo",
+    "orientacion", "estado", "tarifa_base", "ID_hotel", "imagen"
+]
 
 class HabitacionController:
 
@@ -50,7 +56,6 @@ class HabitacionController:
         else:
             messagebox.showerror("Error", hoteles)
 
-
     def guardar(self):
         data = self.view.get_form_data()
 
@@ -59,41 +64,30 @@ class HabitacionController:
             return
 
         ok, numero_habitacion = validate_numeric(data["numero_habitacion"])
-
         if not ok:
-            messagebox.showerror(
-                "Validación",
-                "El numero de habitacion debe contener únicamente números."
-            )
+            messagebox.showerror("Validación", "El número de habitación debe contener únicamente números.")
             return
 
         ok, tarifa_base = validate_numeric(data["tarifa_base"])
-
         if not ok:
-            messagebox.showerror(
-                "Validación",
-                "La tarifa base debe contener únicamente números."
-            )
+            messagebox.showerror("Validación", "La tarifa base debe contener únicamente números.")
             return
 
         if not validate_required(data["piso"]):
-            messagebox.showerror("Validación", "Piso es obligatorio.")
+            messagebox.showerror("Validación", "El piso es obligatorio.")
             return
 
         ok, piso = validate_numeric(data["piso"])
-
         if not ok:
-            messagebox.showerror(
-                "Validación",
-                "El piso base debe contener únicamente números."
-            )
+            messagebox.showerror("Validación", "El piso debe contener únicamente números.")
             return
 
         success, result = self.model.insert(
             data["numero_habitacion"], data["piso"] or None,
             data["ID_tipo"] or None, data["orientacion"] or None,
             data["estado"] or None, data["tarifa_base"] or None,
-            data["ID_hotel"] or None)
+            data["ID_hotel"] or None, data["imagen"] or None
+        )
 
         if success:
             messagebox.showinfo("Éxito", "Habitación guardada correctamente.")
@@ -111,20 +105,22 @@ class HabitacionController:
             return
 
         if not validate_required(data["numero_habitacion"]):
-            messagebox.showerror("Validación", "El numero de la habitación es obligatorio.")
+            messagebox.showerror("Validación", "El número de la habitación es obligatorio.")
             return
         if not validate_required(data["piso"]):
-            messagebox.showerror("Validación", "Piso es obligatorio.")
+            messagebox.showerror("Validación", "El piso es obligatorio.")
             return
 
         success, result = self.model.update(
             ID_habitacion, data["numero_habitacion"], data["piso"] or None,
             data["ID_tipo"] or None, data["orientacion"] or None,
             data["estado"] or None, data["tarifa_base"] or None,
-            data["ID_hotel"] or None)
+            data["ID_hotel"] or None, data["imagen"] or None
+        )
 
         if success:
             messagebox.showinfo("Éxito", "Habitación actualizada.")
+            self.limpiar()
             self.cargar_lista()
         else:
             messagebox.showerror("Error", f"Error al actualizar: {result}")
@@ -175,135 +171,101 @@ class HabitacionController:
     def on_select(self, event):
         values = self.view.get_selected_tree_values()
         if values:
-            self.view.set_form_data(dict(zip(TREE_KEYS, values)))
+            ID_habitacion = values[0]
+            success, result = self.model.get_by_id(ID_habitacion)
+            if success and result:
+                self.view.set_form_data(dict(zip(TREE_KEYS, result[0])))
+
+    def mostrar_imagen(self):
+        """Muestra la imagen de la habitación en una ventana que se adapta al tamaño exacto de la foto."""
+        data = self.view.get_form_data()
+        ruta_imagen = data.get("imagen")
+
+        if not ruta_imagen or not os.path.exists(str(ruta_imagen)):
+            messagebox.showwarning("Sin Imagen", "La habitación seleccionada no tiene una imagen o ruta válida.")
+            return
+
+        try:
+            img = Image.open(ruta_imagen)
+            img.thumbnail((500, 500), Image.Resampling.LANCZOS)
+            ancho_img, alto_img = img.size
+
+            top = Toplevel(self.view)
+            top.title("Imagen de la Habitación")
+            top.resizable(False, False)
+            top.geometry(f"{ancho_img}x{alto_img}")
+
+            photo = ImageTk.PhotoImage(img)
+
+            lbl_img = ttk.Label(top, image=photo)
+            lbl_img.image = photo  # Mantener referencia
+            lbl_img.pack(fill="both", expand=True)
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo cargar la imagen:\n{e}")
 
     def exportar_excel(self):
-
         success, rows = self.model.get_all()
-
-        if not success:
-            messagebox.showerror(
-                "Error",
-                f"No se pudieron obtener las habitaciones: {rows}"
-            )
-            return
-
-        if not rows:
-            messagebox.showinfo(
-                "Exportar",
-                "No hay habitaciones para exportar."
-            )
-            return
-
-        filename = filedialog.asksaveasfilename(
-            title="Guardar archivo Excel",
-            defaultextension=".xlsx",
-            filetypes=[
-                ("Excel", "*.xlsx")
-            ]
-        )
-
-        if not filename:
-            return
-
-        columns = [
-            "ID_habitacion",
-            "numero_habitacion",
-            "piso", "ID_tipo",
-            "orientacion",
-            "estado",
-            "tarifa_base",
-            "ID_hotel"
-        ]
-
-        try:
-
-            exportar_excel(
-                rows,
-                columns,
-                filename
-            )
-
-            messagebox.showinfo(
-                "Éxito",
-                "Archivo Excel exportado correctamente."
-            )
-
-        except Exception as e:
-
-            messagebox.showerror(
-                "Error",
-                f"No se pudo exportar el Excel:\n{e}"
-            )
-
-    def exportar_pdf(self):
-
-        success, rows = self.model.get_all()
-
-        if not success:
-            messagebox.showerror(
-                "Error",
-                f"No se pudieron obtener las habitaciones: {rows}"
-            )
-            return
-
-        if not rows:
-            messagebox.showinfo(
-                "Exportar",
-                "No hay habitaciones para exportar."
-            )
-            return
-
-        filename = filedialog.asksaveasfilename(
-            title="Guardar archivo PDF",
-            defaultextension=".pdf",
-            filetypes=[
-                ("PDF", "*.pdf")
-            ]
-        )
-
-        if not filename:
-            return
-
-        columns = [
-            "ID_habitacion",
-            "numero_habitacion",
-            "piso", "ID_tipo",
-            "orientacion",
-            "estado",
-            "tarifa_base",
-            "ID_hotel"
-        ]
-
-        try:
-
-            exportar_pdf(
-                rows,
-                columns,
-                filename,
-                "REPORTE DE HABITACIONES"
-            )
-
-            messagebox.showinfo(
-                "Éxito",
-                "Archivo PDF exportado correctamente."
-            )
-
-        except Exception as e:
-
-            messagebox.showerror(
-                "Error",
-                f"No se pudo exportar el PDF:\n{e}"
-            )
-
-    def ventana_filtros_exportacion(self):
-        success, rows = self.model.get_all()
-
         if not success:
             messagebox.showerror("Error", f"No se pudieron obtener las habitaciones: {rows}")
             return
 
         if not rows:
+            messagebox.showinfo("Exportar", "No hay habitaciones para exportar.")
+            return
+
+        filename = filedialog.asksaveasfilename(
+            title="Guardar archivo Excel",
+            defaultextension=".xlsx",
+            filetypes=[("Excel", "*.xlsx")]
+        )
+
+        if not filename:
+            return
+
+        columns = [
+            "ID_habitacion", "numero_habitacion", "piso", "ID_tipo",
+            "orientacion", "estado", "tarifa_base", "ID_hotel"
+        ]
+
+        try:
+            exportar_excel(rows, columns, filename)
+            messagebox.showinfo("Éxito", "Archivo Excel exportado correctamente.")
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo exportar el Excel:\n{e}")
+
+    def exportar_pdf(self):
+        success, rows = self.model.get_all()
+        if not success:
+            messagebox.showerror("Error", f"No se pudieron obtener las habitaciones: {rows}")
+            return
+
+        if not rows:
+            messagebox.showinfo("Exportar", "No hay habitaciones para exportar.")
+            return
+
+        filename = filedialog.asksaveasfilename(
+            title="Guardar archivo PDF",
+            defaultextension=".pdf",
+            filetypes=[("PDF", "*.pdf")]
+        )
+
+        if not filename:
+            return
+
+        columns = [
+            "ID_habitacion", "numero_habitacion", "piso", "ID_tipo",
+            "orientacion", "estado", "tarifa_base", "ID_hotel"
+        ]
+
+        try:
+            exportar_pdf(rows, columns, filename, "REPORTE DE HABITACIONES")
+            messagebox.showinfo("Éxito", "Archivo PDF exportado correctamente.")
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo exportar el PDF:\n{e}")
+
+    def ventana_filtros_exportacion(self):
+        success, rows = self.model.get_all()
+        if not success or not rows:
             messagebox.showinfo("Exportar", "No hay habitaciones para exportar.")
             return
 
@@ -332,26 +294,16 @@ class HabitacionController:
         tarifa_hasta = filtros.get("tarifa_hasta")
 
         if not self._numero_valido(tarifa_desde) or not self._numero_valido(tarifa_hasta):
-            messagebox.showerror(
-                "Validación",
-                "El rango de tarifa debe contener únicamente números."
-            )
+            messagebox.showerror("Validación", "El rango de tarifa debe contener únicamente números.")
             return
 
         if tarifa_desde and tarifa_hasta and float(tarifa_desde) > float(tarifa_hasta):
-            messagebox.showerror(
-                "Validación",
-                "La tarifa desde no puede ser mayor que la tarifa hasta."
-            )
+            messagebox.showerror("Validación", "La tarifa desde no puede ser mayor que la tarifa hasta.")
             return
 
         success, rows = self.model.get_all()
-
         if not success:
-            messagebox.showerror(
-                "Error",
-                f"No se pudieron obtener las habitaciones: {rows}"
-            )
+            messagebox.showerror("Error", f"No se pudieron obtener las habitaciones: {rows}")
             return
 
         tipo = filtros.get("tipo")
@@ -370,10 +322,7 @@ class HabitacionController:
         )
 
         if not rows_filtradas:
-            messagebox.showinfo(
-                "Exportación",
-                "No existen habitaciones que coincidan con los filtros."
-            )
+            messagebox.showinfo("Exportación", "No existen habitaciones que coincidan con los filtros.")
             return
 
         extension = ".xlsx" if formato == "excel" else ".pdf"
@@ -396,21 +345,9 @@ class HabitacionController:
             if formato == "excel":
                 exportar_excel(rows_filtradas, columns, filename)
             else:
-                exportar_pdf(
-                    rows_filtradas,
-                    columns,
-                    filename,
-                    "REPORTE DE HABITACIONES"
-                )
+                exportar_pdf(rows_filtradas, columns, filename, "REPORTE DE HABITACIONES")
 
             ventana.destroy()
-            messagebox.showinfo(
-                "Éxito",
-                f"{tipo_archivo} exportado correctamente."
-            )
-
+            messagebox.showinfo("Éxito", f"{tipo_archivo} exportado correctamente.")
         except Exception as e:
-            messagebox.showerror(
-                "Error",
-                f"No se pudo exportar:\n{e}"
-            )
+            messagebox.showerror("Error", f"No se pudo exportar:\n{e}")

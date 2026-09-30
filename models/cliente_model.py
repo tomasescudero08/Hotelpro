@@ -18,15 +18,15 @@ class ClienteModel:
     def get_by_id(self, ID_cliente: int):
         return self.db.call_procedure('sp_GetCliente', (ID_cliente,))
 
-    def insert(self, nombre, apellido, documento, nacionalidad, fecha_nacimiento, direccion, telefono, correo, nivel_fidelizacion):
+    def insert(self, nombre, apellido, documento, nacionalidad, fecha_nacimiento, direccion, telefono, correo, nivel_fidelizacion, imagen):
         return self.db.call_procedure(
             'sp_InsertCliente',
-            (nombre, apellido, documento, nacionalidad, fecha_nacimiento, direccion, telefono, correo, nivel_fidelizacion))
+            (nombre, apellido, documento, nacionalidad, fecha_nacimiento, direccion, telefono, correo, nivel_fidelizacion, imagen))
 
-    def update(self, ID_cliente, nombre, apellido, documento, nacionalidad, fecha_nacimiento, direccion, telefono, correo, nivel_fidelizacion):
+    def update(self, ID_cliente, nombre, apellido, documento, nacionalidad, fecha_nacimiento, direccion, telefono, correo, nivel_fidelizacion, imagen):
         return self.db.call_procedure(
             'sp_UpdateCliente',
-            (ID_cliente, nombre, apellido, documento, nacionalidad, fecha_nacimiento, direccion, telefono, correo, nivel_fidelizacion))
+            (ID_cliente, nombre, apellido, documento, nacionalidad, fecha_nacimiento, direccion, telefono, correo, nivel_fidelizacion, imagen))
 
     def delete(self, ID_cliente: int):
         return self.db.call_procedure('sp_DeleteCliente', (ID_cliente,))

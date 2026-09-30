@@ -1,11 +1,11 @@
 """
 controllers/cliente_controller.py
-─────────────────────────────────────
-CONTROLADOR de cliente: valida la entrada, llama al ClienteModel y
-actualiza la ClienteView con el resultado.
 """
 
-from tkinter import messagebox, filedialog
+import os
+import tkinter as tk
+from tkinter import messagebox, filedialog, Toplevel, ttk
+from PIL import Image, ImageTk
 
 from models.cliente_model import ClienteModel
 from views.cliente_view import ClienteView
@@ -15,19 +15,16 @@ from utils.validators import (
     validate_text,
     validate_email
 )
-
-from utils.exporter import (
-    exportar_excel,
-    exportar_pdf
-)
+from utils.exporter import exportar_excel, exportar_pdf
 from utils.export_filters import filtrar_clientes
 from views.export_dialogs import VentanaFiltroCliente
 
-
-
-TREE_KEYS = ["ID cliente", "nombre", "apellido", "documento",
-             "nacionalidad", "fecha_nacimiento", "direccion", "telefono", "correo", "nivel_fidelizacion"]
-
+# Incluimos 'imagen' en TREE_KEYS para mapear los 11 valores recibidos de la base de datos
+TREE_KEYS = [
+    "ID_cliente", "nombre", "apellido", "documento",
+    "nacionalidad", "fecha_nacimiento", "direccion",
+    "telefono", "correo", "nivel_fidelizacion", "imagen"
+]
 
 class ClienteController:
 
@@ -37,7 +34,6 @@ class ClienteController:
         self.view.pack(fill="both", expand=True)
         self.cargar_lista()
 
-
     def cargar_lista(self):
         success, result = self.model.get_all()
         if success:
@@ -45,79 +41,44 @@ class ClienteController:
         else:
             messagebox.showerror("Error", f"No se pudo cargar la lista: {result}")
 
-
     def guardar(self):
         data = self.view.get_form_data()
+
+        # Validaciones de campos
         if not validate_required(data["nombre"]):
-            messagebox.showerror(
-                "Validación",
-                "El nombre es obligatorio."
-            )
+            messagebox.showerror("Validación", "El nombre es obligatorio.")
             return
         if not validate_text(data["nombre"]):
-            messagebox.showerror(
-                "Validación",
-                "El nombre solo debe contener letras."
-            )
+            messagebox.showerror("Validación", "El nombre solo debe contener letras.")
             return
         if not validate_required(data["apellido"]):
-            messagebox.showerror(
-                "Validación",
-                "El apellido es obligatorio."
-            )
+            messagebox.showerror("Validación", "El apellido es obligatorio.")
             return
-
         if not validate_text(data["apellido"]):
-            messagebox.showerror(
-                "Validación",
-                "El apellido solo debe contener letras."
-            )
+            messagebox.showerror("Validación", "El apellido solo debe contener letras.")
             return
         if not validate_required(data["nacionalidad"]):
-            messagebox.showerror(
-                "Validación",
-                "La nacionalidad es obligatoria."
-            )
+            messagebox.showerror("Validación", "La nacionalidad es obligatoria.")
             return
-
         if not validate_text(data["nacionalidad"]):
-            messagebox.showerror(
-                "Validación",
-                "La nacionalidad solo debe contener letras."
-            )
+            messagebox.showerror("Validación", "La nacionalidad solo debe contener letras.")
             return
         ok, telefono = validate_numeric(data["telefono"])
-
         if not ok:
-            messagebox.showerror(
-                "Validación",
-                "El teléfono debe contener únicamente números."
-            )
+            messagebox.showerror("Validación", "El teléfono debe contener únicamente números.")
             return
         if not validate_required(data["correo"]):
-            messagebox.showerror(
-                "Validación",
-                "El correo es obligatorio."
-            )
+            messagebox.showerror("Validación", "El correo es obligatorio.")
             return
-
         if not validate_email(data["correo"]):
-            messagebox.showerror(
-                "Validación",
-                "Ingrese un correo electrónico válido."
-            )
+            messagebox.showerror("Validación", "Ingrese un correo electrónico válido.")
             return
         ok, nivel = validate_numeric(data["nivel_fidelizacion"])
-
         if not ok:
-            messagebox.showerror(
-                "Validación",
-                "El nivel de fidelización debe ser numérico."
-            )
+            messagebox.showerror("Validación", "El nivel de fidelización debe ser numérico.")
             return
-
         if not validate_required(data["documento"]):
-            messagebox.showerror("Validación", "documento es obligatorio.")
+            messagebox.showerror("Validación", "El documento es obligatorio.")
             return
 
         success, result = self.model.insert(
@@ -125,7 +86,8 @@ class ClienteController:
             data["documento"] or None, data["nacionalidad"] or None,
             data["fecha_nacimiento"] or None, data["direccion"] or None,
             data["telefono"] or None, data["correo"] or None,
-            data["nivel_fidelizacion"] or None)
+            data["nivel_fidelizacion"] or None, data["imagen"] or None
+        )
 
         if success:
             messagebox.showinfo("Éxito", "Cliente guardado correctamente.")
@@ -143,7 +105,7 @@ class ClienteController:
             return
 
         if not validate_required(data["documento"]):
-            messagebox.showerror("Validación", "documento es obligatorio.")
+            messagebox.showerror("Validación", "El documento es obligatorio.")
             return
 
         success, result = self.model.update(
@@ -151,11 +113,12 @@ class ClienteController:
             data["documento"] or None, data["nacionalidad"] or None,
             data["fecha_nacimiento"] or None, data["direccion"] or None,
             data["telefono"] or None, data["correo"] or None,
-            data["nivel_fidelizacion"] or None)
-
+            data["nivel_fidelizacion"] or None, data["imagen"] or None
+        )
 
         if success:
             messagebox.showinfo("Éxito", "Cliente actualizado.")
+            self.limpiar()
             self.cargar_lista()
         else:
             messagebox.showerror("Error", f"Error al actualizar: {result}")
@@ -199,151 +162,53 @@ class ClienteController:
     def on_select(self, event):
         values = self.view.get_selected_tree_values()
         if values:
-            self.view.set_form_data(dict(zip(TREE_KEYS, values)))
+            # Consultamos los datos completos directo del modelo para traer la ruta real del campo 'imagen'
+            ID_cliente = values[0]
+            success, result = self.model.get_by_id(ID_cliente)
+            if success and result:
+                self.view.set_form_data(dict(zip(TREE_KEYS, result[0])))
 
-    def exportar_excel(self):
+    def mostrar_imagen(self):
+        """Abre la foto del cliente en una ventana que se ajusta exactamente al tamaño de la imagen sin permitir redimensionar."""
+        data = self.view.get_form_data()
+        ruta_imagen = data.get("imagen")
 
-        success, rows = self.model.get_all()
-
-        if not success:
-            messagebox.showerror(
-                "Error",
-                f"No se pudieron obtener los clientes: {rows}"
-            )
+        if not ruta_imagen or not os.path.exists(str(ruta_imagen)):
+            messagebox.showwarning("Sin Imagen", "El cliente seleccionado no tiene una imagen o ruta válida.")
             return
-
-        if not rows:
-            messagebox.showinfo(
-                "Exportar",
-                "No hay clientes para exportar."
-            )
-            return
-
-        filename = filedialog.asksaveasfilename(
-            title="Guardar archivo Excel",
-            defaultextension=".xlsx",
-            filetypes=[
-                ("Excel", "*.xlsx")
-            ]
-        )
-
-        if not filename:
-            return
-
-        columns = [
-            "ID cliente",
-            "nombre",
-            "apellido",
-            "documento",
-            "nacionalidad",
-            "fecha_nacimiento",
-            "direccion",
-            "telefono",
-            "correo",
-            "nivel_fidelizacion"
-        ]
 
         try:
+            # Cargar imagen original
+            img = Image.open(ruta_imagen)
 
-            exportar_excel(
-                rows,
-                columns,
-                filename
-            )
+            img.thumbnail((500, 500), Image.Resampling.LANCZOS)
 
-            messagebox.showinfo(
-                "Éxito",
-                "Archivo Excel exportado correctamente."
-            )
+            ancho_img, alto_img = img.size
 
-        except Exception as e:
+            top = Toplevel(self.view)
+            top.title("Imagen del Cliente")
 
-            messagebox.showerror(
-                "Error",
-                f"No se pudo exportar el Excel:\n{e}"
-            )
+            top.resizable(False, False)
 
-    def exportar_pdf(self):
+            top.geometry(f"{ancho_img}x{alto_img}")
 
-        success, rows = self.model.get_all()
+            photo = ImageTk.PhotoImage(img)
 
-        if not success:
-            messagebox.showerror(
-                "Error",
-                f"No se pudieron obtener los clientes: {rows}"
-            )
-            return
-
-        if not rows:
-            messagebox.showinfo(
-                "Exportar",
-                "No hay clientes para exportar."
-            )
-            return
-
-        filename = filedialog.asksaveasfilename(
-            title="Guardar archivo PDF",
-            defaultextension=".pdf",
-            filetypes=[
-                ("PDF", "*.pdf")
-            ]
-        )
-
-        if not filename:
-            return
-
-        columns = [
-            "ID cliente",
-            "nombre",
-            "apellido",
-            "documento",
-            "nacionalidad",
-            "fecha_nacimiento",
-            "direccion",
-            "telefono",
-            "correo",
-            "nivel_fidelizacion"
-        ]
-        try:
-            exportar_pdf(
-                rows,
-                columns,
-                filename,
-                "REPORTE DE CLIENTES"
-            )
-
-            messagebox.showinfo(
-                "Éxito",
-                "Archivo PDF exportado correctamente."
-            )
+            lbl_img = ttk.Label(top, image=photo)
+            lbl_img.image = photo  
+            lbl_img.pack(fill="both", expand=True)
 
         except Exception as e:
-
-            messagebox.showerror(
-                "Error",
-                f"No se pudo exportar el PDF:\n{e}"
-            )
-
+            messagebox.showerror("Error", f"No se pudo cargar la imagen:\n{e}")
 
     def ventana_filtros_exportacion(self):
         success, rows = self.model.get_all()
-
-        if not success:
-            messagebox.showerror("Error", f"No se pudieron obtener los clientes: {rows}")
+        if not success or not rows:
+            messagebox.showinfo("Exportar", "No hay datos para exportar.")
             return
 
-        if not rows:
-            messagebox.showinfo("Exportar", "No hay clientes para exportar.")
-            return
-
-        nacionalidades = sorted({
-            str(row[4]) for row in rows
-            if len(row) > 4 and row[4] is not None
-        })
-        niveles = sorted({
-            str(row[9]) for row in rows
-            if len(row) > 9 and row[9] is not None
-        })
+        nacionalidades = sorted({str(row[4]) for row in rows if len(row) > 4 and row[4] is not None})
+        niveles = sorted({str(row[9]) for row in rows if len(row) > 9 and row[9] is not None})
 
         VentanaFiltroCliente(
             self.view,
@@ -354,9 +219,7 @@ class ClienteController:
 
     def exportar_filtrado(self, formato, filtros, ventana):
         success, rows = self.model.get_all()
-
         if not success:
-            messagebox.showerror("Error", f"No se pudieron obtener los clientes: {rows}")
             return
 
         rows_filtradas = filtrar_clientes(
@@ -368,10 +231,7 @@ class ClienteController:
         )
 
         if not rows_filtradas:
-            messagebox.showinfo(
-                "Exportación",
-                "No existen clientes que coincidan con los filtros."
-            )
+            messagebox.showinfo("Exportación", "No existen clientes con estos filtros.")
             return
 
         extension = ".xlsx" if formato == "excel" else ".pdf"
@@ -395,21 +255,9 @@ class ClienteController:
             if formato == "excel":
                 exportar_excel(rows_filtradas, columns, filename)
             else:
-                exportar_pdf(
-                    rows_filtradas,
-                    columns,
-                    filename,
-                    "REPORTE DE CLIENTES"
-                )
+                exportar_pdf(rows_filtradas, columns, filename, "REPORTE DE CLIENTES")
 
             ventana.destroy()
-            messagebox.showinfo(
-                "Éxito",
-                f"{tipo_archivo} exportado correctamente."
-            )
-
+            messagebox.showinfo("Éxito", f"{tipo_archivo} exportado correctamente.")
         except Exception as e:
-            messagebox.showerror(
-                "Error",
-                f"No se pudo exportar:\n{e}"
-            )
+            messagebox.showerror("Error", f"No se pudo exportar:\n{e}")
